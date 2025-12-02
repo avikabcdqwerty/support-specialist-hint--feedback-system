@@ -1,0 +1,102 @@
+// backend/src/models/schema.prisma
+
+// Prisma schema for Support Specialist Hint & Feedback System
+// Defines models for users, support requests, progress logs, hints/feedback, and immutable audit logs.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  support_specialist
+  admin
+}
+
+enum SupportRequestStatus {
+  OPEN
+  CLOSED
+}
+
+enum ProgressStatus {
+  IN_PROGRESS
+  COMPLETED
+  STUCK
+}
+
+enum HintStatus {
+  UNREAD
+  VIEWED
+}
+
+model User {
+  id             String           @id @default(uuid())
+  username       String           @unique
+  email          String           @unique
+  passwordHash   String
+  role           UserRole         @default(user)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  supportRequests SupportRequest[]
+  progressLogs   ProgressLog[]
+  hints          Hint[]
+  auditLogs      AuditLog[]       @relation("UserAuditLogs", fields: [id], references: [actorId])
+}
+
+model SupportRequest {
+  id         String               @id @default(uuid())
+  user       User                 @relation(fields: [userId], references: [id])
+  userId     String
+  status     SupportRequestStatus @default(OPEN)
+  createdAt  DateTime             @default(now())
+  closedAt   DateTime?
+  hints      Hint[]
+}
+
+model ProgressLog {
+  id         String         @id @default(uuid())
+  user       User           @relation(fields: [userId], references: [id])
+  userId     String
+  stepId     String
+  puzzleId   String?
+  status     ProgressStatus
+  details    String?        // JSON or text details about the step/puzzle
+  updatedAt  DateTime       @updatedAt
+  createdAt  DateTime       @default(now())
+}
+
+model Hint {
+  id                String         @id @default(uuid())
+  user              User           @relation(fields: [userId], references: [id])
+  userId            String
+  supportRequest    SupportRequest @relation(fields: [supportRequestId], references: [id])
+  supportRequestId  String
+  stepId            String
+  puzzleId          String?
+  message           String
+  sentById          String?        // Support Specialist or Admin ID
+  sentByRole        UserRole?
+  status            HintStatus     @default(UNREAD)
+  createdAt         DateTime       @default(now())
+  viewedAt          DateTime?
+}
+
+model AuditLog {
+  id            String    @id @default(uuid())
+  actorId       String
+  actorRole     String
+  action        String
+  targetUserId  String?
+  metadata      String?   // JSON stringified metadata
+  timestamp     DateTime  @default(now())
+
+  @@map("audit_logs")
+  @@index([actorId])
+  @@index([targetUserId])
+  @@index([timestamp])
+}
